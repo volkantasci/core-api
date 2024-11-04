@@ -234,37 +234,47 @@ class Country implements \JsonSerializable
             return static::all();
         }
 
-        $query = strtolower($query);
+        $query = strtolower(trim($query));
 
-        // Stage 1: Check for exact matches (highest priority)
+        // Stage 1: Exact matches for codes (highest priority)
         $exactMatches = static::filter(function ($country) use ($query) {
-            return strtolower($country->getCode()) === $query ||
-                   strtolower($country->getCca2()) === $query;
+            $cca2 = strtolower(trim($country->getCca2() ?? ''));
+            $code = strtolower(trim($country->getCode() ?? ''));
+            
+            return $cca2 === $query || $code === $query;
         });
 
-        // If we have exact matches, return them
         if ($exactMatches->isNotEmpty()) {
             return $exactMatches;
         }
 
-        // Stage 2: Check for partial matches with priority
-        return static::filter(function ($country) use ($query) {
-            // Name match (medium priority)
-            if (Str::contains(strtolower($country->getName()), $query)) {
+        // Stage 2: Name and currency matches (medium priority)
+        $nameAndCurrencyMatches = static::filter(function ($country) use ($query) {
+            // Name match
+            if (Str::contains(strtolower(trim($country->getName() ?? '')), $query)) {
                 return true;
             }
 
-            // Currency match (medium priority)
-            if (strtolower($country->getCurrency()) === $query) {
-                return true;
-            }
-
-            // Abbreviation match (lowest priority)
-            if ($country->getAbbrev() && Str::contains(strtolower($country->getAbbrev()), $query)) {
+            // Currency match
+            if (strtolower(trim($country->getCurrency() ?? '')) === $query) {
                 return true;
             }
 
             return false;
+        });
+
+        if ($nameAndCurrencyMatches->isNotEmpty()) {
+            return $nameAndCurrencyMatches;
+        }
+
+        // Stage 3: Abbreviation matches (lowest priority)
+        return static::filter(function ($country) use ($query) {
+            $abbrev = $country->getAbbrev();
+            if (!$abbrev) {
+                return false;
+            }
+
+            return Str::contains(strtolower(trim($abbrev)), $query);
         });
     }
 
