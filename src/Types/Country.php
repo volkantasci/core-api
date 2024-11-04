@@ -230,25 +230,42 @@ class Country implements \JsonSerializable
      */
     public static function search(string $query)
     {
-        return static::filter(
-            function ($country) use ($query) {
-                if (empty($query) || !is_string($query)) {
-                    return true;
-                }
+        if (empty($query) || !is_string($query)) {
+            return static::all();
+        }
 
-                $query = strtolower($query);
+        $query = strtolower($query);
 
-                $matches = [
-                    strtolower($country->getCurrency()) === $query,
-                    strtolower($country->getCode()) === $query,
-                    strtolower($country->getCca2()) === $query,
-                    Str::contains(strtolower($country->getAbbrev()), $query),
-                    // Str::contains(strtolower($country->getName()), $query),
-                ];
+        // Stage 1: Check for exact matches (highest priority)
+        $exactMatches = static::filter(function ($country) use ($query) {
+            return strtolower($country->getCode()) === $query ||
+                   strtolower($country->getCca2()) === $query;
+        });
 
-                return count(array_filter($matches));
+        // If we have exact matches, return them
+        if ($exactMatches->isNotEmpty()) {
+            return $exactMatches;
+        }
+
+        // Stage 2: Check for partial matches with priority
+        return static::filter(function ($country) use ($query) {
+            // Name match (medium priority)
+            if (Str::contains(strtolower($country->getName()), $query)) {
+                return true;
             }
-        );
+
+            // Currency match (medium priority)
+            if (strtolower($country->getCurrency()) === $query) {
+                return true;
+            }
+
+            // Abbreviation match (lowest priority)
+            if ($country->getAbbrev() && Str::contains(strtolower($country->getAbbrev()), $query)) {
+                return true;
+            }
+
+            return false;
+        });
     }
 
     /**
